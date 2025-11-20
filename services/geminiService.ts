@@ -1,7 +1,7 @@
-import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
+import { GoogleGenerativeAI, SchemaType, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { FoodAnalysis } from "../types";
 
-// RESİM SIKIŞTIRMA VE DÖNÜŞTÜRME FONKSİYONU (HIZ OPTİMİZASYONU)
+// RESİM SIKIŞTIRMA FONKSİYONU
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -10,7 +10,6 @@ export const fileToBase64 = (file: File): Promise<string> => {
       const img = new Image();
       img.src = event.target?.result as string;
       img.onload = () => {
-        // Hedef boyut: En uzun kenar 1024px (Hem hızlı yüklenir hem de yazılar okunabilir kalır)
         const MAX_SIZE = 1024;
         let width = img.width;
         let height = img.height;
@@ -33,29 +32,25 @@ export const fileToBase64 = (file: File): Promise<string> => {
         
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          reject(new Error("Resim işlenirken hata oluştu."));
+          reject(new Error("Canvas oluşturulamadı (Tarayıcı hatası)."));
           return;
         }
         
         ctx.drawImage(img, 0, 0, width, height);
-        
-        // Resmi JPEG formatına çevir ve %70 kaliteye düşür (Gözle görülmez ama dosya boyutu çok küçülür)
         const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
-        
-        // "data:image/jpeg;base64," başlığını atıp sadece veriyi döndür
         resolve(dataUrl.split(',')[1]);
       };
-      img.onerror = (err) => reject(new Error("Resim yüklenemedi."));
+      img.onerror = () => reject(new Error("Resim dosyası bozuk veya okunamıyor."));
     };
     reader.onerror = (error) => reject(error);
   });
 };
 
 export const analyzeFoodImage = async (base64Image: string, mimeType: string): Promise<FoodAnalysis> => {
-  // API Anahtarını al (Vite standardına uygun)
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  
   if (!apiKey) {
-    throw new Error("API Key eksik! Lütfen Vercel ayarlarında VITE_GEMINI_API_KEY tanımlayın.");
+    throw new Error("API Anahtarı Bulunamadı! Lütfen Vercel ayarlarında 'VITE_GEMINI_API_KEY' adında bir değişken olduğundan emin olun.");
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -64,52 +59,30 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
     description: "Gıda analiz sonucu",
     type: SchemaType.OBJECT,
     properties: {
-      productName: { 
-        type: SchemaType.STRING, 
-        description: "Ürünün adı. Eğer marka görünmüyorsa, ürünün ne olduğunu yaz (Örn: 'Kakaolu Bisküvi', 'Meyve Suyu')." 
-      },
-      healthScore: { 
-        type: SchemaType.NUMBER, 
-        description: "0 ile 100 arası sağlık puanı. İçeriklere göre hesapla." 
-      },
+      productName: { type: SchemaType.STRING, description: "Ürün adı" },
+      healthScore: { type: SchemaType.NUMBER, description: "0-100 sağlık puanı" },
       verdict: { 
         type: SchemaType.STRING, 
         enum: ["Excellent", "Good", "Average", "Poor", "Bad"],
-        description: "Genel sağlık kararı."
+        description: "Karar"
       },
-      summary: { 
-        type: SchemaType.STRING, 
-        description: "Analiz özeti (Türkçe). Ürünün ne olduğunu değil, içeriğin sağlıklı olup olmadığını anlat." 
-      },
-      pros: {
-        type: SchemaType.ARRAY,
-        items: { type: SchemaType.STRING },
-        description: "Olumlu yönler (Türkçe). Örn: 'Şeker ilavesiz', 'Yüksek protein'."
-      },
-      cons: {
-        type: SchemaType.ARRAY,
-        items: { type: SchemaType.STRING },
-        description: "Olumsuz yönler (Türkçe). Örn: 'Yüksek doymuş yağ', 'E102 içerir'."
-      },
+      summary: { type: SchemaType.STRING, description: "Türkçe özet" },
+      pros: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+      cons: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
       additives: {
         type: SchemaType.ARRAY,
         items: {
           type: SchemaType.OBJECT,
           properties: {
-            code: { type: SchemaType.STRING, description: "E-kodu (varsa)" },
-            name: { type: SchemaType.STRING, description: "Maddenin adı" },
+            code: { type: SchemaType.STRING },
+            name: { type: SchemaType.STRING },
             riskLevel: { type: SchemaType.STRING, enum: ["Safe", "Moderate", "High"] },
-            description: { type: SchemaType.STRING, description: "Neden riskli veya güvenli olduğu (Türkçe)" }
+            description: { type: SchemaType.STRING }
           },
           required: ["code", "name", "riskLevel", "description"]
-        },
-        description: "Tespit edilen katkı maddeleri."
+        }
       },
-      highlights: {
-        type: SchemaType.ARRAY,
-        items: { type: SchemaType.STRING },
-        description: "Öne çıkanlar (Türkçe)."
-      },
+      highlights: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
       isVegetarian: { type: SchemaType.BOOLEAN },
       isGlutenFree: { type: SchemaType.BOOLEAN },
       isPalmOilFree: { type: SchemaType.BOOLEAN },
@@ -120,6 +93,13 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
   try {
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-flash",
+      // Güvenlik ayarlarını en aza indiriyoruz ki gıda resimlerini engellemesin
+      safetySettings: [
+        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
+        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
+      ],
       generationConfig: {
         responseMimeType: "application/json",
         responseSchema: schema,
@@ -127,21 +107,17 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
     });
 
     const prompt = `
-      Sen uzman bir Gıda Mühendisisin. Görevin bu görseldeki gıda etiketini analiz etmek.
-      
-      ÖNEMLİ KURALLAR:
-      1. Markayı tanımasan bile, sadece **görseldeki metinleri (İçindekiler, Besin Değerleri Tablosu)** okuyarak analiz yap.
-      2. Eğer ürünün adı görünmüyorsa, ne olduğunu tahmin et (Örn: "Bilinmeyen Kraker", "Domates Salçası") ve 'productName' alanına yaz.
-      3. İçindekiler listesindeki E-kodlarını (Örn: E330, E621) veya kimyasal isimleri (Monosodyum Glutamat, Glikoz Şurubu) tespit et.
-      4. "healthScore" puanını markaya göre değil, okuduğun şeker, yağ, tuz ve katkı maddesi oranlarına göre VERİLERLE hesapla.
-      5. Çıktıyı sadece Türkçe olarak ver.
+      Sen uzman bir Gıda Mühendisisin. Bu gıda etiketini analiz et.
+      1. Görseldeki metinleri (İçindekiler, Besin Değerleri) oku.
+      2. Ürün adını bulamazsan tahmin et.
+      3. Sağlık puanını (healthScore) verilere göre hesapla.
+      4. Sadece Türkçe yanıt ver.
     `;
 
-    // Not: Sıkıştırılmış resim her zaman jpeg formatındadır
     const result = await model.generateContent([
       {
         inlineData: {
-          mimeType: "image/jpeg", 
+          mimeType: "image/jpeg",
           data: base64Image
         }
       },
@@ -151,8 +127,17 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
     const text = result.response.text();
     return JSON.parse(text) as FoodAnalysis;
 
-  } catch (error) {
-    console.error("Gemini Analysis Error:", error);
-    throw new Error("Analiz sırasında bir hata oluştu. İnternet bağlantınızı kontrol edin.");
+  } catch (error: any) {
+    console.error("Gerçek Hata Detayı:", error);
+    
+    // Hatanın içindeki asıl mesajı yakalayıp kullanıcıya gösterelim
+    let errorMessage = error.message || error.toString();
+    
+    if (errorMessage.includes("400")) errorMessage = "İstek Hatası (400): API Anahtarı geçersiz veya görsel formatı bozuk.";
+    if (errorMessage.includes("403")) errorMessage = "Erişim Reddedildi (403): API Anahtarınızın yetkisi yok veya Vercel'de yanlış girilmiş.";
+    if (errorMessage.includes("429")) errorMessage = "Kota Aşıldı (429): Çok fazla istek gönderdiniz, biraz bekleyin.";
+    if (errorMessage.includes("Vercel")) errorMessage = "API Anahtarı eksik. Vercel ayarlarını kontrol edin.";
+    
+    throw new Error(`Servis Hatası: ${errorMessage}`);
   }
 };
