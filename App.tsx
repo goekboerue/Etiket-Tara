@@ -189,6 +189,12 @@ const App: React.FC = () => {
         )}
 
       </main>
+
+      <footer className="w-full py-6 text-center mt-auto">
+        <p className="text-gray-400 text-sm flex items-center justify-center gap-1">
+          Geliştirici: <span className="font-handwriting text-xl text-gray-600">Cafer Ahmet Koç</span>
+        </p>
+      </footer>
       
       {/* Simple footer styles injection for custom animations */}
       <style>{`
