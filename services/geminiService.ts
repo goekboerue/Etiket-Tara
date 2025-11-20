@@ -1,138 +1,114 @@
-import { GoogleGenerativeAI, SchemaType, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
+import { GoogleGenAI, Type } from "@google/genai";
 import { FoodAnalysis } from "../types";
 
+// Helper to convert file to Base64
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = (event) => {
-      const img = new Image();
-      img.src = event.target?.result as string;
-      img.onload = () => {
-        const MAX_SIZE = 1024;
-        let width = img.width;
-        let height = img.height;
-
-        if (width > height) {
-          if (width > MAX_SIZE) {
-            height *= MAX_SIZE / width;
-            width = MAX_SIZE;
-          }
-        } else {
-          if (height > MAX_SIZE) {
-            width *= MAX_SIZE / height;
-            height = MAX_SIZE;
-          }
-        }
-
-        const canvas = document.createElement('canvas');
-        canvas.width = width;
-        canvas.height = height;
-        
-        const ctx = canvas.getContext('2d');
-        if (!ctx) {
-          reject(new Error("Resim işleme hatası (Canvas)."));
-          return;
-        }
-        
-        ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.8);
-        resolve(dataUrl.split(',')[1]);
-      };
-      img.onerror = () => reject(new Error("Resim dosyası bozuk."));
+    reader.onload = () => {
+      const result = reader.result as string;
+      // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
+      const base64 = result.split(',')[1];
+      resolve(base64);
     };
     reader.onerror = (error) => reject(error);
   });
 };
 
 export const analyzeFoodImage = async (base64Image: string, mimeType: string): Promise<FoodAnalysis> => {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
-  
-  if (!apiKey) {
-    throw new Error("API Anahtarı Eksik! Vercel ayarlarını kontrol edin.");
+  if (!process.env.API_KEY) {
+    throw new Error("API Key is missing");
   }
 
-  const genAI = new GoogleGenerativeAI(apiKey);
+  const ai = new GoogleGenAI({ apiKey: process.env.API_KEY });
 
-  const schema = {
-    description: "Gıda analiz sonucu",
-    type: SchemaType.OBJECT,
+  // Define the strict schema for the AI response
+  const analysisSchema = {
+    type: Type.OBJECT,
     properties: {
-      productName: { type: SchemaType.STRING, description: "Ürün adı" },
-      healthScore: { type: SchemaType.NUMBER, description: "0-100 sağlık puanı" },
+      productName: { type: Type.STRING, description: "The likely name of the product found on the label." },
+      healthScore: { type: Type.INTEGER, description: "A health score from 0 (very unhealthy) to 100 (very healthy)." },
       verdict: { 
-        type: SchemaType.STRING, 
+        type: Type.STRING, 
         enum: ["Excellent", "Good", "Average", "Poor", "Bad"],
-        description: "Karar"
+        description: "A single word verdict on the overall healthiness."
       },
-      summary: { type: SchemaType.STRING, description: "Türkçe özet" },
-      pros: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-      cons: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
+      summary: { type: Type.STRING, description: "A short paragraph summarizing the analysis in Turkish." },
+      pros: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+        description: "List of positive aspects (e.g., High protein, No sugar) in Turkish."
+      },
+      cons: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+        description: "List of negative aspects (e.g., High sodium, Palm oil) in Turkish."
+      },
       additives: {
-        type: SchemaType.ARRAY,
+        type: Type.ARRAY,
         items: {
-          type: SchemaType.OBJECT,
+          type: Type.OBJECT,
           properties: {
-            code: { type: SchemaType.STRING },
-            name: { type: SchemaType.STRING },
-            riskLevel: { type: SchemaType.STRING, enum: ["Safe", "Moderate", "High"] },
-            description: { type: SchemaType.STRING }
+            code: { type: Type.STRING, description: "E-number if available, or name." },
+            name: { type: Type.STRING, description: "Common name of the additive." },
+            riskLevel: { type: Type.STRING, enum: ["Safe", "Moderate", "High"] },
+            description: { type: Type.STRING, description: "Short description of why it is good or bad in Turkish." }
           },
           required: ["code", "name", "riskLevel", "description"]
-        }
+        },
+        description: "List of potentially notable additives found."
       },
-      highlights: { type: SchemaType.ARRAY, items: { type: SchemaType.STRING } },
-      isVegetarian: { type: SchemaType.BOOLEAN },
-      isGlutenFree: { type: SchemaType.BOOLEAN },
-      isPalmOilFree: { type: SchemaType.BOOLEAN },
+      highlights: {
+        type: Type.ARRAY,
+        items: { type: Type.STRING },
+        description: "Key highlights like 'High Protein', 'Low Carb' in Turkish."
+      },
+      isVegetarian: { type: Type.BOOLEAN },
+      isGlutenFree: { type: Type.BOOLEAN },
+      isPalmOilFree: { type: Type.BOOLEAN },
     },
     required: ["productName", "healthScore", "verdict", "summary", "pros", "cons", "additives", "highlights", "isVegetarian", "isGlutenFree", "isPalmOilFree"]
   };
 
   try {
-    const model = genAI.getGenerativeModel({
-      // EN STANDART MODEL İSMİNE DÖNDÜK
-      model: "gemini-1.5-flash",
-      safetySettings: [
-        { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
-        { category: HarmCategory.HARM_CATEGORY_SEXUALLY_EXPLICIT, threshold: HarmBlockThreshold.BLOCK_NONE },
-        { category: HarmCategory.HARM_CATEGORY_DANGEROUS_CONTENT, threshold: HarmBlockThreshold.BLOCK_NONE },
-      ],
-      generationConfig: {
+    const response = await ai.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: {
+        parts: [
+          {
+            inlineData: {
+              mimeType: mimeType,
+              data: base64Image
+            }
+          },
+          {
+            text: `
+              Analyze this food label or product image. 
+              Extract the ingredients list and nutritional values if visible.
+              Identify any additives (E-numbers) and assess their health risk.
+              Provide a comprehensive health analysis.
+              Critically evaluate the product for health benefits and harms.
+              IMPORTANT: Respond ONLY with the JSON data matching the schema.
+              All text fields (summary, pros, cons, descriptions) MUST be in Turkish Language.
+            `
+          }
+        ]
+      },
+      config: {
         responseMimeType: "application/json",
-        responseSchema: schema,
+        responseSchema: analysisSchema,
+        temperature: 0.4, // Lower temperature for more factual analysis
       }
     });
 
-    const prompt = `
-      Sen uzman bir Gıda Mühendisisin. Bu gıda etiketini analiz et.
-      1. Görseldeki metinleri (İçindekiler, Besin Değerleri) oku.
-      2. Ürün adını bulamazsan tahmin et.
-      3. Sağlık puanını (healthScore) verilere göre hesapla.
-      4. Sadece Türkçe yanıt ver.
-    `;
-
-    const result = await model.generateContent([
-      {
-        inlineData: {
-          mimeType: "image/jpeg",
-          data: base64Image
-        }
-      },
-      prompt
-    ]);
-
-    const text = result.response.text();
+    const text = response.text;
+    if (!text) throw new Error("No response from AI");
+    
     return JSON.parse(text) as FoodAnalysis;
 
-  } catch (error: any) {
-    console.error("Hata Detayı:", error);
-    let errorMessage = error.message || error.toString();
-    
-    if (errorMessage.includes("404")) errorMessage = "Model Bulunamadı (404): API Anahtarınız bu modeli desteklemiyor. Lütfen YENİ BİR API KEY oluşturun.";
-    if (errorMessage.includes("API key")) errorMessage = "API Anahtarı Hatası: Vercel ayarlarını kontrol edin.";
-    
-    throw new Error(errorMessage);
+  } catch (error) {
+    console.error("Gemini Analysis Error:", error);
+    throw error;
   }
 };
