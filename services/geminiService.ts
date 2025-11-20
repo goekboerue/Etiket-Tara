@@ -9,6 +9,7 @@ export const fileToBase64 = (file: File): Promise<string> => {
       const img = new Image();
       img.src = event.target?.result as string;
       img.onload = () => {
+        // Resmi çok küçültmeyelim ki okunabilsin, ama çok da büyük olmasın
         const MAX_SIZE = 1024;
         let width = img.width;
         let height = img.height;
@@ -31,15 +32,15 @@ export const fileToBase64 = (file: File): Promise<string> => {
         
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          reject(new Error("Canvas oluşturulamadı."));
+          reject(new Error("Canvas hatası"));
           return;
         }
         
         ctx.drawImage(img, 0, 0, width, height);
-        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.8); // Kaliteyi biraz artırdık (0.8)
         resolve(dataUrl.split(',')[1]);
       };
-      img.onerror = () => reject(new Error("Resim okunamadı."));
+      img.onerror = () => reject(new Error("Resim yüklenemedi"));
     };
     reader.onerror = (error) => reject(error);
   });
@@ -91,8 +92,8 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
 
   try {
     const model = genAI.getGenerativeModel({
-      // MODEL ADINI DAHA SPESİFİK YAPTIK
-      model: "gemini-1.5-flash-001",
+      // DEĞİŞİKLİK BURADA: Flash yerine PRO modelini kullanıyoruz
+      model: "gemini-1.5-pro",
       safetySettings: [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
         { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -129,8 +130,8 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
   } catch (error: any) {
     console.error("Hata Detayı:", error);
     let errorMessage = error.message || error.toString();
-    // Hata mesajını kullanıcı dostu yap
-    if (errorMessage.includes("404")) errorMessage = "Model Bulunamadı (404): Kütüphane güncelleniyor, lütfen 1-2 dakika sonra tekrar deneyin.";
+    
+    if (errorMessage.includes("404")) errorMessage = "Model Bulunamadı (404): Lütfen 1-2 dakika daha bekleyin, sistem güncelleniyor.";
     if (errorMessage.includes("API key")) errorMessage = "API Anahtarı Hatası: Vercel ayarlarını kontrol edin.";
     
     throw new Error(`Servis Hatası: ${errorMessage}`);
