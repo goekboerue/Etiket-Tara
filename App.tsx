@@ -8,7 +8,10 @@ const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [analysis, setAnalysis] = useState<FoodAnalysis | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  
+  // Separate refs for Camera and Gallery inputs
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
@@ -35,12 +38,24 @@ const App: React.FC = () => {
     } catch (err: any) {
       console.error(err);
       setAppState(AppState.ERROR);
-      setErrorMsg(err.message || "Analiz sırasında bir hata oluştu. Lütfen tekrar deneyin.");
-    } finally {
-      // Reset input so same file can be selected again if needed
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
+      
+      // Sanitize error message for user display
+      let message = "Analiz sırasında bir hata oluştu.";
+      if (err.message) {
+        if (err.message.includes("503") || err.message.includes("overloaded")) {
+          message = "Sunucular şu an çok yoğun. Lütfen kısa bir süre sonra tekrar deneyin.";
+        } else if (err.message.includes("API Key")) {
+          message = "API Anahtarı eksik veya hatalı.";
+        } else {
+          // Clean up raw JSON errors if they leak through
+          message = err.message.replace(/\{.*"message":\s*"(.*?)".*\}/g, '$1').substring(0, 100) + "...";
+        }
       }
+      setErrorMsg(message);
+    } finally {
+      // Reset inputs so same file can be selected again if needed
+      if (cameraInputRef.current) cameraInputRef.current.value = '';
+      if (galleryInputRef.current) galleryInputRef.current.value = '';
     }
   };
 
@@ -81,18 +96,30 @@ const App: React.FC = () => {
               </p>
 
               <div className="space-y-4">
-                {/* Hidden Input */}
+                {/* Hidden Input 1: Camera (Forces camera on mobile) */}
                 <input
                   type="file"
                   accept="image/*"
-                  capture="environment" // Prefer rear camera on mobile
-                  ref={fileInputRef}
+                  capture="environment" 
+                  ref={cameraInputRef}
                   onChange={handleFileSelect}
                   className="hidden"
+                  id="camera-input"
+                />
+
+                {/* Hidden Input 2: Gallery (Standard file picker) */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  // No capture attribute allows gallery selection
+                  ref={galleryInputRef}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                  id="gallery-input"
                 />
 
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => cameraInputRef.current?.click()}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl shadow-lg shadow-blue-600/20 transition transform active:scale-95 flex items-center justify-center gap-3"
                 >
                   <Camera size={20} />
@@ -109,7 +136,7 @@ const App: React.FC = () => {
                 </div>
 
                 <button 
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => galleryInputRef.current?.click()}
                   className="w-full bg-white border-2 border-gray-200 hover:border-gray-300 text-gray-700 font-semibold py-3 px-6 rounded-xl transition flex items-center justify-center gap-3"
                 >
                   <Upload size={20} />
@@ -147,7 +174,7 @@ const App: React.FC = () => {
               <AlertCircle className="text-red-600" size={40} />
             </div>
             <h3 className="text-lg font-bold text-gray-900 mb-2">Bir Hata Oluştu</h3>
-            <p className="text-gray-600 mb-6">{errorMsg}</p>
+            <p className="text-gray-600 mb-6 max-w-xs mx-auto">{errorMsg}</p>
             <button
               onClick={resetApp}
               className="bg-gray-900 text-white px-6 py-2 rounded-lg hover:bg-gray-800 transition"

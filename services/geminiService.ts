@@ -16,6 +16,9 @@ export const fileToBase64 = (file: File): Promise<string> => {
   });
 };
 
+// Helper for delay
+const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
+
 export const analyzeFoodImage = async (base64Image: string, mimeType: string): Promise<FoodAnalysis> => {
   if (!process.env.API_KEY) {
     throw new Error("API Key is missing");
@@ -71,55 +74,75 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
     required: ["productName", "healthScore", "verdict", "summary", "pros", "cons", "additives", "highlights", "isVegetarian", "isGlutenFree", "isPalmOilFree"]
   };
 
-  try {
-    const response = await ai.models.generateContent({
-      model: "gemini-2.5-flash",
-      contents: {
-        parts: [
-          {
-            inlineData: {
-              mimeType: mimeType,
-              data: base64Image
+  let attempts = 0;
+  const maxAttempts = 3;
+
+  while (attempts < maxAttempts) {
+    try {
+      const response = await ai.models.generateContent({
+        model: "gemini-2.5-flash",
+        contents: {
+          parts: [
+            {
+              inlineData: {
+                mimeType: mimeType,
+                data: base64Image
+              }
+            },
+            {
+              text: `
+                Analyze this image for food health purposes. The image might contain a Nutrition Label, Ingredients List, Product Front Packaging, or a QR Code/Barcode.
+
+                Instructions:
+                1. **Identify the Product**: 
+                   - Look for the brand name and product name text.
+                   - **CRITICAL**: If you see a **QR Code** or **Barcode**, try to "read" it visually or use the numbers/pattern to identify the specific product.
+                   - If no text/brand is visible, identify the product by its visual appearance (e.g., "Chocolate Cookie", "Canned Corn").
+                
+                2. **Analyze Health**:
+                   - Extract ingredients and nutritional values if visible.
+                   - Identify additives (E-numbers).
+                   - **Contextual Analysis**: If the text is blurry or missing, but you identified the product (via QR/Barcode or Shape), use your internal knowledge about that specific product type to estimate the health score, pros, and cons.
+                
+                3. **Output**:
+                   - Provide a comprehensive health analysis (Benefits vs Harms).
+                   - Calculate a health score (0-100).
+                   - IMPORTANT: Respond ONLY with the JSON data matching the schema.
+                   - All text fields (summary, pros, cons, descriptions) MUST be in Turkish Language.
+              `
             }
-          },
-          {
-            text: `
-              Analyze this image for food health purposes. The image might contain a Nutrition Label, Ingredients List, Product Front Packaging, or a QR Code/Barcode.
+          ]
+        },
+        config: {
+          responseMimeType: "application/json",
+          responseSchema: analysisSchema,
+          temperature: 0.4, 
+        }
+      });
 
-              Instructions:
-              1. **Identify the Product**: 
-                 - Look for the brand name and product name text.
-                 - **CRITICAL**: If you see a **QR Code** or **Barcode**, try to "read" it visually or use the numbers/pattern to identify the specific product.
-                 - If no text/brand is visible, identify the product by its visual appearance (e.g., "Chocolate Cookie", "Canned Corn").
-              
-              2. **Analyze Health**:
-                 - Extract ingredients and nutritional values if visible.
-                 - Identify additives (E-numbers).
-                 - **Contextual Analysis**: If the text is blurry or missing, but you identified the product (via QR/Barcode or Shape), use your internal knowledge about that specific product type to estimate the health score, pros, and cons.
-              
-              3. **Output**:
-                 - Provide a comprehensive health analysis (Benefits vs Harms).
-                 - Calculate a health score (0-100).
-                 - IMPORTANT: Respond ONLY with the JSON data matching the schema.
-                 - All text fields (summary, pros, cons, descriptions) MUST be in Turkish Language.
-            `
-          }
-        ]
-      },
-      config: {
-        responseMimeType: "application/json",
-        responseSchema: analysisSchema,
-        temperature: 0.4, 
+      const text = response.text;
+      if (!text) throw new Error("No response from AI");
+      
+      return JSON.parse(text) as FoodAnalysis;
+
+    } catch (error: any) {
+      // Check if error is 503 Service Unavailable or Overloaded
+      const isOverloaded = 
+        error.message?.includes("503") || 
+        error.message?.includes("overloaded") ||
+        error.status === 503;
+
+      if (isOverloaded && attempts < maxAttempts - 1) {
+        console.warn(`Gemini Model Overloaded. Retrying in ${(attempts + 1) * 2} seconds...`);
+        await delay(2000 * (attempts + 1)); // Wait 2s, then 4s
+        attempts++;
+        continue;
       }
-    });
-
-    const text = response.text;
-    if (!text) throw new Error("No response from AI");
-    
-    return JSON.parse(text) as FoodAnalysis;
-
-  } catch (error) {
-    console.error("Gemini Analysis Error:", error);
-    throw error;
+      
+      console.error("Gemini Analysis Error:", error);
+      throw error;
+    }
   }
+  
+  throw new Error("Sunucu yoğunluğu nedeniyle işlem tamamlanamadı. Lütfen tekrar deneyin.");
 };
