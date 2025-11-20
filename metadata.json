@@ -1,0 +1,7 @@
+{
+  "name": "NutriScan AI (Gıda Analizi)",
+  "description": "QR kod ve gıda etiketi tarayarak içerik analizi yapan, fayda/zarar raporu sunan yapay zeka destekli sağlık asistanı.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
