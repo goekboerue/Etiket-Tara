@@ -8,12 +8,18 @@ const App: React.FC = () => {
   const [appState, setAppState] = useState<AppState>(AppState.IDLE);
   const [analysis, setAnalysis] = useState<FoodAnalysis | null>(null);
   const [errorMsg, setErrorMsg] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  // İki ayrı referans oluşturuyoruz: Biri kamera, biri galeri için
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   const handleFileSelect = useCallback(async (event: React.ChangeEvent<HTMLInputElement>) => {
     if (event.target.files && event.target.files.length > 0) {
       const file = event.target.files[0];
       await processFile(file);
+      
+      // Seçim yapıldıktan sonra input değerini temizle (aynı dosyayı tekrar seçebilmek için)
+      event.target.value = ''; 
     }
   }, []);
 
@@ -22,7 +28,6 @@ const App: React.FC = () => {
     setErrorMsg(null);
 
     try {
-      // Simple validation
       if (!file.type.startsWith('image/')) {
         throw new Error('Lütfen geçerli bir resim dosyası yükleyin.');
       }
@@ -36,12 +41,8 @@ const App: React.FC = () => {
       console.error(err);
       setAppState(AppState.ERROR);
       setErrorMsg(err.message || "Analiz sırasında bir hata oluştu. Lütfen tekrar deneyin.");
-    } finally {
-      // Reset input so same file can be selected again if needed
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-    }
+    } 
+    // Finally bloğundaki temizleme işlemini handleFileSelect içine taşıdık
   };
 
   const resetApp = () => {
@@ -53,7 +54,6 @@ const App: React.FC = () => {
   return (
     <div className="min-h-screen bg-gray-50 flex flex-col items-center p-4 md:p-8">
       
-      {/* Header */}
       <header className="w-full max-w-2xl mb-8 flex items-center justify-center md:justify-between">
         <div className="flex items-center gap-2">
           <div className="bg-green-500 p-2 rounded-lg shadow-lg shadow-green-500/20">
@@ -65,7 +65,6 @@ const App: React.FC = () => {
         </div>
       </header>
 
-      {/* Main Content Area */}
       <main className="w-full max-w-2xl flex-1 flex flex-col">
         
         {appState === AppState.IDLE && (
@@ -81,18 +80,29 @@ const App: React.FC = () => {
               </p>
 
               <div className="space-y-4">
-                {/* Hidden Input */}
+                {/* 1. GİZLİ INPUT: Sadece Kamera İçin (Capture özelliği var) */}
                 <input
                   type="file"
                   accept="image/*"
-                  capture="environment" // Prefer rear camera on mobile
-                  ref={fileInputRef}
+                  capture="environment"
+                  ref={cameraInputRef}
                   onChange={handleFileSelect}
                   className="hidden"
                 />
 
+                {/* 2. GİZLİ INPUT: Sadece Galeri İçin (Capture özelliği YOK) */}
+                <input
+                  type="file"
+                  accept="image/*"
+                  // capture özelliği kaldırıldı, böylece galeri açılacak
+                  ref={galleryInputRef}
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+
+                {/* Kamera Butonu -> Camera Input'u tetikler */}
                 <button
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => cameraInputRef.current?.click()}
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl shadow-lg shadow-blue-600/20 transition transform active:scale-95 flex items-center justify-center gap-3"
                 >
                   <Camera size={20} />
@@ -108,8 +118,9 @@ const App: React.FC = () => {
                   </div>
                 </div>
 
+                {/* Galeri Butonu -> Galeri Input'u tetikler */}
                 <button 
-                  onClick={() => fileInputRef.current?.click()}
+                  onClick={() => galleryInputRef.current?.click()}
                   className="w-full bg-white border-2 border-gray-200 hover:border-gray-300 text-gray-700 font-semibold py-3 px-6 rounded-xl transition flex items-center justify-center gap-3"
                 >
                   <Upload size={20} />
@@ -163,7 +174,6 @@ const App: React.FC = () => {
 
       </main>
       
-      {/* Simple footer styles injection for custom animations */}
       <style>{`
         @keyframes fade-in {
           from { opacity: 0; transform: translateY(10px); }
