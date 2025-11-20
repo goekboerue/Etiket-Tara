@@ -8,7 +8,6 @@ export const fileToBase64 = (file: File): Promise<string> => {
     reader.readAsDataURL(file);
     reader.onload = () => {
       const result = reader.result as string;
-      // Remove the data URL prefix (e.g., "data:image/jpeg;base64,")
       const base64 = result.split(',')[1];
       resolve(base64);
     };
@@ -17,34 +16,36 @@ export const fileToBase64 = (file: File): Promise<string> => {
 };
 
 export const analyzeFoodImage = async (base64Image: string, mimeType: string): Promise<FoodAnalysis> => {
-  if (!process.env.API_KEY) {
-    throw new Error("API Key is missing - Lütfen Vercel ayarlarından GEMINI_API_KEY ekleyin.");
+  // DEĞİŞİKLİK BURADA: process.env yerine import.meta.env kullandık
+  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+
+  if (!apiKey) {
+    throw new Error("API Key eksik! Lütfen Vercel ayarlarında VITE_GEMINI_API_KEY tanımlayın.");
   }
 
-  const genAI = new GoogleGenerativeAI(process.env.API_KEY);
+  const genAI = new GoogleGenerativeAI(apiKey);
 
-  // JSON Schema definition for the new SDK
   const schema = {
     description: "Food analysis data",
     type: SchemaType.OBJECT,
     properties: {
-      productName: { type: SchemaType.STRING, description: "The likely name of the product found on the label." },
-      healthScore: { type: SchemaType.NUMBER, description: "A health score from 0 (very unhealthy) to 100 (very healthy)." },
+      productName: { type: SchemaType.STRING, description: "Product name" },
+      healthScore: { type: SchemaType.NUMBER, description: "0-100 score" },
       verdict: { 
         type: SchemaType.STRING, 
         enum: ["Excellent", "Good", "Average", "Poor", "Bad"],
-        description: "A single word verdict on the overall healthiness."
+        description: "Verdict"
       },
-      summary: { type: SchemaType.STRING, description: "A short paragraph summarizing the analysis in Turkish." },
+      summary: { type: SchemaType.STRING, description: "Turkish summary" },
       pros: {
         type: SchemaType.ARRAY,
         items: { type: SchemaType.STRING },
-        description: "List of positive aspects in Turkish."
+        description: "Pros in Turkish"
       },
       cons: {
         type: SchemaType.ARRAY,
         items: { type: SchemaType.STRING },
-        description: "List of negative aspects in Turkish."
+        description: "Cons in Turkish"
       },
       additives: {
         type: SchemaType.ARRAY,
@@ -62,7 +63,7 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
       highlights: {
         type: SchemaType.ARRAY,
         items: { type: SchemaType.STRING },
-        description: "Key highlights like 'High Protein', 'Low Carb' in Turkish."
+        description: "Highlights in Turkish"
       },
       isVegetarian: { type: SchemaType.BOOLEAN },
       isGlutenFree: { type: SchemaType.BOOLEAN },
@@ -72,7 +73,6 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
   };
 
   try {
-    // Use the stable 1.5-flash model
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-flash",
       generationConfig: {
@@ -88,11 +88,7 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
           data: base64Image
         }
       },
-      `Analyze this food label or product image. 
-       Extract ingredients and nutritional values.
-       Identify additives.
-       Provide a health analysis in Turkish.
-       Respond ONLY with valid JSON matching the schema.`
+      `Analyze this food label. Provide output in Turkish where requested. Respond ONLY with JSON.`
     ]);
 
     const text = result.response.text();
@@ -100,6 +96,7 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
 
   } catch (error) {
     console.error("Gemini Analysis Error:", error);
-    throw new Error("Yapay zeka analizi başarısız oldu. Lütfen tekrar deneyin.");
+    // Hata mesajını daha anlaşılır hale getirelim
+    throw new Error("Bağlantı hatası! Lütfen reklam engelleyicinizi kapatıp tekrar deneyin.");
   }
 };
