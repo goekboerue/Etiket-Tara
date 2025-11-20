@@ -233,6 +233,15 @@ const App: React.FC = () => {
           animation: progress 2s ease-in-out infinite;
         }
       `}</style>
+      {/* ... (main etiketi bittikten sonra, en dıştaki div kapanmadan önce) */}
+      
+      <footer className="w-full py-6 text-center">
+        <p className="text-sm text-gray-400">
+          Geliştirici: <span className="font-semibold text-gray-600">Cafer Ahmet Koç</span>
+        </p>
+      </footer>
+
+      {/* style etiketleri buranın altında kalacak */}
     </div>
   );
 };
