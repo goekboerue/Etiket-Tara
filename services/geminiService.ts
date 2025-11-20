@@ -1,22 +1,58 @@
 import { GoogleGenerativeAI, SchemaType } from "@google/generative-ai";
 import { FoodAnalysis } from "../types";
 
-// Dosyayı Base64 formatına çeviren yardımcı fonksiyon
+// RESİM SIKIŞTIRMA VE DÖNÜŞTÜRME FONKSİYONU (HIZ OPTİMİZASYONU)
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
     reader.readAsDataURL(file);
-    reader.onload = () => {
-      const result = reader.result as string;
-      const base64 = result.split(',')[1];
-      resolve(base64);
+    reader.onload = (event) => {
+      const img = new Image();
+      img.src = event.target?.result as string;
+      img.onload = () => {
+        // Hedef boyut: En uzun kenar 1024px (Hem hızlı yüklenir hem de yazılar okunabilir kalır)
+        const MAX_SIZE = 1024;
+        let width = img.width;
+        let height = img.height;
+
+        if (width > height) {
+          if (width > MAX_SIZE) {
+            height *= MAX_SIZE / width;
+            width = MAX_SIZE;
+          }
+        } else {
+          if (height > MAX_SIZE) {
+            width *= MAX_SIZE / height;
+            height = MAX_SIZE;
+          }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = width;
+        canvas.height = height;
+        
+        const ctx = canvas.getContext('2d');
+        if (!ctx) {
+          reject(new Error("Resim işlenirken hata oluştu."));
+          return;
+        }
+        
+        ctx.drawImage(img, 0, 0, width, height);
+        
+        // Resmi JPEG formatına çevir ve %70 kaliteye düşür (Gözle görülmez ama dosya boyutu çok küçülür)
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
+        
+        // "data:image/jpeg;base64," başlığını atıp sadece veriyi döndür
+        resolve(dataUrl.split(',')[1]);
+      };
+      img.onerror = (err) => reject(new Error("Resim yüklenemedi."));
     };
     reader.onerror = (error) => reject(error);
   });
 };
 
 export const analyzeFoodImage = async (base64Image: string, mimeType: string): Promise<FoodAnalysis> => {
-  // 1. API Anahtarını alıyoruz
+  // API Anahtarını al (Vite standardına uygun)
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   if (!apiKey) {
     throw new Error("API Key eksik! Lütfen Vercel ayarlarında VITE_GEMINI_API_KEY tanımlayın.");
@@ -24,7 +60,6 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
 
   const genAI = new GoogleGenerativeAI(apiKey);
 
-  // 2. Cevap formatını (Şema) tanımlıyoruz
   const schema = {
     description: "Gıda analiz sonucu",
     type: SchemaType.OBJECT,
@@ -83,7 +118,6 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
   };
 
   try {
-    // 3. Modeli seçiyoruz
     const model = genAI.getGenerativeModel({
       model: "gemini-1.5-flash",
       generationConfig: {
@@ -92,7 +126,6 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
       }
     });
 
-    // 4. Yapay Zekaya Gönderilen KOMUT (PROMPT) - BURASI GÜNCELLENDİ
     const prompt = `
       Sen uzman bir Gıda Mühendisisin. Görevin bu görseldeki gıda etiketini analiz etmek.
       
@@ -104,10 +137,11 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
       5. Çıktıyı sadece Türkçe olarak ver.
     `;
 
+    // Not: Sıkıştırılmış resim her zaman jpeg formatındadır
     const result = await model.generateContent([
       {
         inlineData: {
-          mimeType: mimeType,
+          mimeType: "image/jpeg", 
           data: base64Image
         }
       },
@@ -119,6 +153,6 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
 
   } catch (error) {
     console.error("Gemini Analysis Error:", error);
-    throw new Error("Etiket okunamadı veya bağlantı hatası oluştu. Lütfen fotoğrafın net olduğundan emin olun.");
+    throw new Error("Analiz sırasında bir hata oluştu. İnternet bağlantınızı kontrol edin.");
   }
 };
