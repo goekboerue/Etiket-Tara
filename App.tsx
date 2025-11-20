@@ -1,5 +1,5 @@
 import React, { useState, useRef, useCallback } from 'react';
-import { Scan, Upload, Loader2, Camera, AlertCircle } from 'lucide-react';
+import { Scan, Upload, Loader2, Camera, AlertCircle, QrCode } from 'lucide-react';
 import { analyzeFoodImage, fileToBase64 } from './services/geminiService';
 import { FoodAnalysis, AppState } from './types';
 import ResultCard from './components/ResultCard';
@@ -72,12 +72,12 @@ const App: React.FC = () => {
           <div className="flex flex-col items-center justify-center flex-1 min-h-[60vh] animate-fade-in text-center">
             <div className="bg-white p-8 rounded-3xl shadow-xl w-full max-w-md border border-gray-100">
               <div className="w-20 h-20 bg-blue-50 rounded-full flex items-center justify-center mx-auto mb-6">
-                <Scan className="text-blue-600" size={40} />
+                <QrCode className="text-blue-600" size={40} />
               </div>
               
-              <h2 className="text-2xl font-bold text-gray-900 mb-3">Gıda Etiketini Tara</h2>
+              <h2 className="text-2xl font-bold text-gray-900 mb-3">Etiket veya Barkod Tara</h2>
               <p className="text-gray-500 mb-8 leading-relaxed">
-                Ürünün <strong>içindekiler kısmının</strong> veya <strong>besin değerleri tablosunun</strong> fotoğrafını çekin. Yapay zeka sizin için analiz etsin.
+                Ürünün <strong>etiketini</strong>, <strong>barkodunu</strong> veya <strong>QR kodunu</strong> çekin. Marka görünmese bile yapay zeka içeriği analiz eder.
               </p>
 
               <div className="space-y-4">
@@ -96,7 +96,7 @@ const App: React.FC = () => {
                   className="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-4 px-6 rounded-xl shadow-lg shadow-blue-600/20 transition transform active:scale-95 flex items-center justify-center gap-3"
                 >
                   <Camera size={20} />
-                  Fotoğraf Çek / Tara
+                  Fotoğraf Çek
                 </button>
                 
                 <div className="relative">
@@ -132,8 +132,8 @@ const App: React.FC = () => {
                 <Loader2 className="animate-spin text-blue-600" size={48} />
               </div>
             </div>
-            <h2 className="mt-8 text-xl font-semibold text-gray-800">Etiket Analiz Ediliyor...</h2>
-            <p className="mt-2 text-gray-500 text-sm">Yapay zeka içeriği okuyor ve değerlendiriyor.</p>
+            <h2 className="mt-8 text-xl font-semibold text-gray-800">Analiz Yapılıyor...</h2>
+            <p className="mt-2 text-gray-500 text-sm">Etiket, QR kod veya ürün görseli taranıyor.</p>
             
             <div className="mt-8 w-64 bg-gray-200 rounded-full h-1.5 overflow-hidden">
               <div className="bg-blue-500 h-1.5 rounded-full animate-progress"></div>

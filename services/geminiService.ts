@@ -27,7 +27,7 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
   const analysisSchema = {
     type: Type.OBJECT,
     properties: {
-      productName: { type: Type.STRING, description: "The likely name of the product found on the label." },
+      productName: { type: Type.STRING, description: "The identified name of the product. If brand is hidden, use the product category (e.g. 'Orange Juice')." },
       healthScore: { type: Type.INTEGER, description: "A health score from 0 (very unhealthy) to 100 (very healthy)." },
       verdict: { 
         type: Type.STRING, 
@@ -84,13 +84,24 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
           },
           {
             text: `
-              Analyze this food label or product image. 
-              Extract the ingredients list and nutritional values if visible.
-              Identify any additives (E-numbers) and assess their health risk.
-              Provide a comprehensive health analysis.
-              Critically evaluate the product for health benefits and harms.
-              IMPORTANT: Respond ONLY with the JSON data matching the schema.
-              All text fields (summary, pros, cons, descriptions) MUST be in Turkish Language.
+              Analyze this image for food health purposes. The image might contain a Nutrition Label, Ingredients List, Product Front Packaging, or a QR Code/Barcode.
+
+              Instructions:
+              1. **Identify the Product**: 
+                 - Look for the brand name and product name text.
+                 - **CRITICAL**: If you see a **QR Code** or **Barcode**, try to "read" it visually or use the numbers/pattern to identify the specific product.
+                 - If no text/brand is visible, identify the product by its visual appearance (e.g., "Chocolate Cookie", "Canned Corn").
+              
+              2. **Analyze Health**:
+                 - Extract ingredients and nutritional values if visible.
+                 - Identify additives (E-numbers).
+                 - **Contextual Analysis**: If the text is blurry or missing, but you identified the product (via QR/Barcode or Shape), use your internal knowledge about that specific product type to estimate the health score, pros, and cons.
+              
+              3. **Output**:
+                 - Provide a comprehensive health analysis (Benefits vs Harms).
+                 - Calculate a health score (0-100).
+                 - IMPORTANT: Respond ONLY with the JSON data matching the schema.
+                 - All text fields (summary, pros, cons, descriptions) MUST be in Turkish Language.
             `
           }
         ]
@@ -98,7 +109,7 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
       config: {
         responseMimeType: "application/json",
         responseSchema: analysisSchema,
-        temperature: 0.4, // Lower temperature for more factual analysis
+        temperature: 0.4, 
       }
     });
 
