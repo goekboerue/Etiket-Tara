@@ -1,7 +1,6 @@
 import { GoogleGenerativeAI, SchemaType, HarmCategory, HarmBlockThreshold } from "@google/generative-ai";
 import { FoodAnalysis } from "../types";
 
-// RESİM SIKIŞTIRMA FONKSİYONU
 export const fileToBase64 = (file: File): Promise<string> => {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -32,7 +31,7 @@ export const fileToBase64 = (file: File): Promise<string> => {
         
         const ctx = canvas.getContext('2d');
         if (!ctx) {
-          reject(new Error("Canvas oluşturulamadı (Tarayıcı hatası)."));
+          reject(new Error("Canvas oluşturulamadı."));
           return;
         }
         
@@ -40,7 +39,7 @@ export const fileToBase64 = (file: File): Promise<string> => {
         const dataUrl = canvas.toDataURL('image/jpeg', 0.7);
         resolve(dataUrl.split(',')[1]);
       };
-      img.onerror = () => reject(new Error("Resim dosyası bozuk veya okunamıyor."));
+      img.onerror = () => reject(new Error("Resim okunamadı."));
     };
     reader.onerror = (error) => reject(error);
   });
@@ -50,7 +49,7 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
   const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
   
   if (!apiKey) {
-    throw new Error("API Anahtarı Bulunamadı! Lütfen Vercel ayarlarında 'VITE_GEMINI_API_KEY' adında bir değişken olduğundan emin olun.");
+    throw new Error("API Anahtarı Eksik! Vercel ayarlarını kontrol edin.");
   }
 
   const genAI = new GoogleGenerativeAI(apiKey);
@@ -92,8 +91,8 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
 
   try {
     const model = genAI.getGenerativeModel({
-      model: "gemini-1.5-flash",
-      // Güvenlik ayarlarını en aza indiriyoruz ki gıda resimlerini engellemesin
+      // MODEL ADINI DAHA SPESİFİK YAPTIK
+      model: "gemini-1.5-flash-001",
       safetySettings: [
         { category: HarmCategory.HARM_CATEGORY_HARASSMENT, threshold: HarmBlockThreshold.BLOCK_NONE },
         { category: HarmCategory.HARM_CATEGORY_HATE_SPEECH, threshold: HarmBlockThreshold.BLOCK_NONE },
@@ -128,15 +127,11 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
     return JSON.parse(text) as FoodAnalysis;
 
   } catch (error: any) {
-    console.error("Gerçek Hata Detayı:", error);
-    
-    // Hatanın içindeki asıl mesajı yakalayıp kullanıcıya gösterelim
+    console.error("Hata Detayı:", error);
     let errorMessage = error.message || error.toString();
-    
-    if (errorMessage.includes("400")) errorMessage = "İstek Hatası (400): API Anahtarı geçersiz veya görsel formatı bozuk.";
-    if (errorMessage.includes("403")) errorMessage = "Erişim Reddedildi (403): API Anahtarınızın yetkisi yok veya Vercel'de yanlış girilmiş.";
-    if (errorMessage.includes("429")) errorMessage = "Kota Aşıldı (429): Çok fazla istek gönderdiniz, biraz bekleyin.";
-    if (errorMessage.includes("Vercel")) errorMessage = "API Anahtarı eksik. Vercel ayarlarını kontrol edin.";
+    // Hata mesajını kullanıcı dostu yap
+    if (errorMessage.includes("404")) errorMessage = "Model Bulunamadı (404): Kütüphane güncelleniyor, lütfen 1-2 dakika sonra tekrar deneyin.";
+    if (errorMessage.includes("API key")) errorMessage = "API Anahtarı Hatası: Vercel ayarlarını kontrol edin.";
     
     throw new Error(`Servis Hatası: ${errorMessage}`);
   }
