@@ -1,7 +1,7 @@
 import React from 'react';
 import { FoodAnalysis, Additive } from '../types';
 import ScoreGauge from './ScoreGauge';
-import { CheckCircle, AlertTriangle, XCircle, Info, Leaf, Wheat, Droplet } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Info, Leaf, Wheat, Droplet, Share2 } from 'lucide-react';
 
 interface ResultCardProps {
   analysis: FoodAnalysis;
@@ -30,24 +30,52 @@ const ResultCard: React.FC<ResultCardProps> = ({ analysis, onReset }) => {
     }
   };
 
+  const handleShare = async () => {
+    const shareData = {
+      title: `NutriScan: ${analysis.productName}`,
+      text: `🍎 NutriScan Gıda Analizi\n\nÜrün: ${analysis.productName}\nSağlık Puanı: ${analysis.healthScore}/100\nSonuç: ${analysis.verdict}\n\nÖzet: ${analysis.summary}\n\nDaha sağlıklı seçimler için NutriScan AI kullanın.`,
+      url: window.location.href
+    };
+
+    try {
+      if (navigator.share) {
+        await navigator.share(shareData);
+      } else {
+        // Fallback to clipboard
+        await navigator.clipboard.writeText(shareData.text);
+        alert("Analiz sonucu kopyalandı!");
+      }
+    } catch (err) {
+      console.error("Paylaşım hatası:", err);
+    }
+  };
+
   return (
-    <div className="w-full max-w-2xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden animate-fade-in pb-20">
+    <div className="w-full max-w-2xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden animate-fade-in pb-20 relative">
       
       {/* Header Section */}
-      <div className="bg-white p-6 border-b border-gray-100">
+      <div className="bg-white p-6 border-b border-gray-100 relative">
+        <button 
+          onClick={handleShare}
+          className="absolute top-4 right-4 p-2 text-gray-400 hover:text-blue-600 bg-gray-50 hover:bg-blue-50 rounded-full transition"
+          aria-label="Paylaş"
+        >
+          <Share2 size={20} />
+        </button>
+
         <div className="flex flex-col md:flex-row items-center gap-6">
           <div className="flex-shrink-0">
              <ScoreGauge score={analysis.healthScore} />
           </div>
           <div className="flex-1 text-center md:text-left">
-            <h2 className="text-2xl font-bold text-gray-900 mb-2">{analysis.productName || "Bilinmeyen Ürün"}</h2>
+            <h2 className="text-2xl font-bold text-gray-900 mb-2 pr-8">{analysis.productName || "Bilinmeyen Ürün"}</h2>
             <div className={`inline-block px-4 py-1.5 rounded-full text-sm font-bold border ${getVerdictColor(analysis.verdict)}`}>
               {analysis.verdict === 'Excellent' ? 'Mükemmel' : 
                analysis.verdict === 'Good' ? 'İyi' : 
                analysis.verdict === 'Average' ? 'Ortalama' : 
                analysis.verdict === 'Poor' ? 'Zayıf' : 'Kötü'}
             </div>
-             <div className="flex gap-3 justify-center md:justify-start mt-4">
+             <div className="flex gap-3 justify-center md:justify-start mt-4 flex-wrap">
                 {analysis.isVegetarian && (
                   <span className="flex items-center gap-1 text-xs text-green-600 bg-green-50 px-2 py-1 rounded border border-green-100">
                     <Leaf size={12} /> Vejetaryen
@@ -130,7 +158,7 @@ const ResultCard: React.FC<ResultCardProps> = ({ analysis, onReset }) => {
       )}
 
       {/* Action Button */}
-      <div className="fixed bottom-4 left-0 right-0 px-4 flex justify-center">
+      <div className="fixed bottom-4 left-0 right-0 px-4 flex justify-center z-10">
         <button
           onClick={onReset}
           className="bg-gray-900 hover:bg-gray-800 text-white px-8 py-3 rounded-full shadow-lg font-medium transition transform active:scale-95 flex items-center gap-2"

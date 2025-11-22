@@ -12,6 +12,8 @@ export interface NutritionFact {
 }
 
 export interface FoodAnalysis {
+  id?: string; // Unique ID for history
+  timestamp?: number; // Date of scan
   productName: string;
   healthScore: number; // 0 to 100
   verdict: 'Excellent' | 'Good' | 'Average' | 'Poor' | 'Bad';
