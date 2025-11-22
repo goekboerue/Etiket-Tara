@@ -1,7 +1,7 @@
 import React from 'react';
 import { FoodAnalysis, Additive } from '../types';
 import ScoreGauge from './ScoreGauge';
-import { CheckCircle, AlertTriangle, XCircle, Info, Leaf, Wheat, Droplet, Share2 } from 'lucide-react';
+import { CheckCircle, AlertTriangle, XCircle, Info, Leaf, Wheat, Droplet, Share2, Sparkles } from 'lucide-react';
 
 interface ResultCardProps {
   analysis: FoodAnalysis;
@@ -51,7 +51,7 @@ const ResultCard: React.FC<ResultCardProps> = ({ analysis, onReset }) => {
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden animate-fade-in pb-20 relative">
+    <div className="w-full max-w-2xl mx-auto bg-white rounded-3xl shadow-xl overflow-hidden animate-fade-in pb-24 relative">
       
       {/* Header Section */}
       <div className="bg-white p-6 border-b border-gray-100 relative">
@@ -103,6 +103,23 @@ const ResultCard: React.FC<ResultCardProps> = ({ analysis, onReset }) => {
         </h3>
         <p className="text-blue-800 text-sm leading-relaxed">{analysis.summary}</p>
       </div>
+
+      {/* Alternatives Section (Displayed only if present) */}
+      {analysis.alternatives && analysis.alternatives.length > 0 && (
+        <div className="p-6 bg-purple-50 border-b border-purple-100">
+           <h3 className="text-sm font-bold text-purple-900 uppercase tracking-wide mb-3 flex items-center gap-2">
+            <Sparkles size={16} /> Daha Sağlıklı Alternatifler
+          </h3>
+          <div className="grid gap-3">
+            {analysis.alternatives.map((alt, idx) => (
+              <div key={idx} className="bg-white p-3 rounded-xl border border-purple-100 shadow-sm flex flex-col">
+                <span className="font-bold text-purple-700">{alt.productName}</span>
+                <span className="text-xs text-gray-600 mt-1">{alt.reason}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {/* Pros & Cons Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-0 border-b border-gray-100">

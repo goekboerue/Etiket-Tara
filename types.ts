@@ -11,6 +11,11 @@ export interface NutritionFact {
   status: 'Good' | 'Bad' | 'Neutral';
 }
 
+export interface AlternativeProduct {
+  productName: string;
+  reason: string;
+}
+
 export interface FoodAnalysis {
   id?: string; // Unique ID for history
   timestamp?: number; // Date of scan
@@ -21,6 +26,7 @@ export interface FoodAnalysis {
   pros: string[];
   cons: string[];
   additives: Additive[];
+  alternatives?: AlternativeProduct[]; // Suggested healthier swaps
   highlights: string[];
   isVegetarian: boolean;
   isGlutenFree: boolean;

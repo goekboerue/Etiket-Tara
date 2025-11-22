@@ -48,6 +48,17 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
         items: { type: Type.STRING },
         description: "List of negative aspects (e.g., High sodium, Palm oil) in Turkish."
       },
+      alternatives: {
+        type: Type.ARRAY,
+        items: { 
+          type: Type.OBJECT,
+          properties: {
+            productName: { type: Type.STRING, description: "Name of a healthier alternative product." },
+            reason: { type: Type.STRING, description: "Why this alternative is better (e.g. 'Less sugar', 'Whole grain'). In Turkish." }
+          }
+        },
+        description: "If healthScore < 60, list 2-3 healthier generic product alternatives. If healthy, leave empty."
+      },
       additives: {
         type: Type.ARRAY,
         items: {
@@ -97,18 +108,23 @@ export const analyzeFoodImage = async (base64Image: string, mimeType: string): P
                 1. **Identify the Product**: 
                    - Look for the brand name and product name text.
                    - **CRITICAL**: If you see a **QR Code** or **Barcode**, try to "read" it visually or use the numbers/pattern to identify the specific product.
-                   - If no text/brand is visible, identify the product by its visual appearance (e.g., "Chocolate Cookie", "Canned Corn").
+                   - If no text/brand is visible, identify the product by its visual appearance.
                 
                 2. **Analyze Health**:
                    - Extract ingredients and nutritional values if visible.
                    - Identify additives (E-numbers).
-                   - **Contextual Analysis**: If the text is blurry or missing, but you identified the product (via QR/Barcode or Shape), use your internal knowledge about that specific product type to estimate the health score, pros, and cons.
+                   - **Contextual Analysis**: If the text is blurry or missing, but you identified the product, use your internal knowledge about that specific product type to estimate the health score, pros, and cons.
                 
-                3. **Output**:
+                3. **Suggest Alternatives**:
+                   - **IF the calculated health score is below 60 (Average, Poor, or Bad)**: Suggest 2-3 healthier alternatives. 
+                   - These should be generic product types or common healthy variations (e.g., "If analyzing sugary soda -> Suggest Sparkling Water with Fruit").
+                   - Do NOT output specific brand URLs.
+                
+                4. **Output**:
                    - Provide a comprehensive health analysis (Benefits vs Harms).
                    - Calculate a health score (0-100).
                    - IMPORTANT: Respond ONLY with the JSON data matching the schema.
-                   - All text fields (summary, pros, cons, descriptions) MUST be in Turkish Language.
+                   - All text fields (summary, pros, cons, descriptions, alternatives) MUST be in Turkish Language.
               `
             }
           ]
